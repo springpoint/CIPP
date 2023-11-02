@@ -37,6 +37,9 @@ const AddRMM = () => {
     values.selectedTenants.map(
       (tenant) => (values[`Select_${tenant.defaultDomainName}`] = tenant.defaultDomainName),
     )
+    if (values.AssignTo === 'customGroup') {
+      values.AssignTo = values.customGroup
+    }
     genericPostRequest({ path: '/api/AddMSPApp', values: values })
   }
 
@@ -44,6 +47,7 @@ const AddRMM = () => {
     arch: true,
     RemoveVersions: true,
     AcceptLicense: true,
+    AssignTo: 'On',
   }
 
   return (
@@ -103,7 +107,7 @@ const AddRMM = () => {
               <RFFSelectSearch
                 values={[
                   { value: 'datto', name: 'Datto RMM' },
-                  { value: 'ninja', name: 'NinjaOne' },
+                  //{ value: 'ninja', name: 'NinjaOne' },
                   //{ value: 'ncentral', name: 'N-Able N-Central' },
                   //{ value: 'nablermm', name: 'N-Able RMM' },
                   { value: 'syncro', name: 'Syncro RMM' },
@@ -126,7 +130,6 @@ const AddRMM = () => {
           </CRow>
           <FormSpy>
             {(props) => {
-              /* eslint-disable react/prop-types */
               return (
                 <>
                   <Condition when="rmmname.value" is={'datto'}>
@@ -312,6 +315,18 @@ const AddRMM = () => {
             name="AssignTo"
             label="Assign to all users and devices"
           ></RFFCFormRadio>
+          <RFFCFormRadio
+            value="customGroup"
+            name="AssignTo"
+            label="Assign to Custom Group"
+          ></RFFCFormRadio>
+          <Condition when="AssignTo" is="customGroup">
+            <RFFCFormInput
+              type="text"
+              name="customGroup"
+              label="Custom Group Names seperated by comma. Wildcards (*) are allowed"
+            />
+          </Condition>
         </CForm>
         <hr className="my-4" />
       </CippWizard.Page>
@@ -324,7 +339,6 @@ const AddRMM = () => {
         {!postResults.isSuccess && (
           <FormSpy>
             {(props) => {
-              /* eslint-disable react/prop-types */
               return (
                 <>
                   <CRow>

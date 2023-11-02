@@ -1,13 +1,33 @@
 import React from 'react'
-import { CCol, CRow, CForm, CListGroup, CListGroupItem, CCallout, CSpinner } from '@coreui/react'
+import {
+  CCol,
+  CRow,
+  CForm,
+  CListGroup,
+  CListGroupItem,
+  CCallout,
+  CSpinner,
+  CInputGroup,
+  CFormInput,
+  CButton,
+} from '@coreui/react'
 import { Field, FormSpy } from 'react-final-form'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faExclamationTriangle } from '@fortawesome/free-solid-svg-icons'
 import { CippWizard } from 'src/components/layout'
 import { WizardTableField } from 'src/components/tables'
 import PropTypes from 'prop-types'
-import { RFFCFormInput, RFFCFormRadio, RFFCFormSwitch } from 'src/components/forms'
+import {
+  Condition,
+  RFFCFormCheck,
+  RFFCFormInput,
+  RFFCFormRadio,
+  RFFCFormSelect,
+  RFFCFormSwitch,
+} from 'src/components/forms'
 import { useLazyGenericPostRequestQuery } from 'src/store/api/app'
+import { OnChange } from 'react-final-form-listeners'
+import { useRef } from 'react'
 
 const Error = ({ name }) => (
   <Field
@@ -32,19 +52,53 @@ const requiredArray = (value) => (value && value.length !== 0 ? undefined : 'Req
 
 const ApplyStandard = () => {
   const [genericPostRequest, postResults] = useLazyGenericPostRequestQuery()
+  const [searchPostRequest, foundPackages] = useLazyGenericPostRequestQuery()
 
   const handleSubmit = async (values) => {
     values.selectedTenants.map(
       (tenant) => (values[`Select_${tenant.defaultDomainName}`] = tenant.defaultDomainName),
     )
+    if (values.AssignTo === 'customGroup') {
+      values.AssignTo = values.customGroup
+    }
     genericPostRequest({ path: '/api/AddChocoApp', values: values })
   }
-
+  const handleSearch = async ({ searchString, customRepo }) => {
+    searchPostRequest({
+      path: '/api/ListAppsRepository',
+      values: { Search: searchString, Repository: customRepo },
+    })
+  }
   const formValues = {
     InstallAsSystem: true,
     DisableRestart: true,
+    AssignTo: 'On',
   }
+  const searchRef = useRef(null)
+  const customRepoRef = useRef(null)
 
+  const WhenFieldChanges = ({ field, set }) => (
+    <Field name={set} subscription={{}}>
+      {(
+        // No subscription. We only use Field to get to the change function
+        { input: { onChange } },
+      ) => (
+        <FormSpy subscription={{}}>
+          {({ form }) => (
+            <OnChange name={field}>
+              {(value) => {
+                let template = foundPackages.data.Results.filter(function (obj) {
+                  console.log(value)
+                  return obj.packagename === value
+                })
+                onChange(template[0][set])
+              }}
+            </OnChange>
+          )}
+        </FormSpy>
+      )}
+    </Field>
+  )
   return (
     <CippWizard
       initialValues={{ ...formValues }}
@@ -53,7 +107,7 @@ const ApplyStandard = () => {
     >
       <CippWizard.Page
         title="Tenant Choice"
-        description="Choose the tenants to create the standard for."
+        description="Choose the tenants to create the application for."
       >
         <center>
           <h3 className="text-primary">Step 1</h3>
@@ -88,8 +142,8 @@ const ApplyStandard = () => {
         <hr className="my-4" />
       </CippWizard.Page>
       <CippWizard.Page
-        title="Select Standards"
-        description="Select which standards you want to apply."
+        title="Select Application Settings"
+        description="Select which application to deploy."
       >
         <center>
           <h3 className="text-primary">Step 2</h3>
@@ -97,6 +151,59 @@ const ApplyStandard = () => {
         </center>
         <hr className="my-4" />
         <CForm onSubmit={handleSubmit}>
+          <CRow>
+            <CCol md={6}>
+              <CInputGroup className="me-2">
+                <CFormInput
+                  placeholder="Search Packages"
+                  aria-label="Search Packages"
+                  ref={searchRef}
+                />
+                <CButton
+                  size="sm"
+                  name="SearchNow"
+                  onClick={() =>
+                    handleSearch({
+                      searchString: searchRef.current.value,
+                      customRepo: customRepoRef.current.value,
+                    })
+                  }
+                >
+                  Search
+                </CButton>
+              </CInputGroup>
+            </CCol>
+            <CCol md={6}>
+              <CFormInput
+                className="me-2"
+                name="customRepo"
+                placeholder="Custom repository URL"
+                aria-label="Custom repository URL"
+                ref={customRepoRef}
+              />
+            </CCol>
+          </CRow>
+          <CRow>
+            <CCol md={6}>
+              {foundPackages.isFetching && <CSpinner className="me-3" />}
+              {foundPackages.isSuccess && (
+                <RFFCFormSelect
+                  label="Package"
+                  values={foundPackages?.data.Results.map((chocoPackage) => ({
+                    value: chocoPackage.packagename,
+                    label: `${chocoPackage.applicationName} - ${chocoPackage.packagename}`,
+                  }))}
+                  placeholder={!foundPackages.isFetching ? 'Select package' : 'Loading...'}
+                  name="PackageSelector"
+                />
+              )}
+            </CCol>
+            <WhenFieldChanges field="PackageSelector" set="packagename" />
+            <WhenFieldChanges field="PackageSelector" set="applicationName" />
+            <WhenFieldChanges field="PackageSelector" set="description" />
+            <WhenFieldChanges field="PackageSelector" set="customRepo" />
+          </CRow>
+          <hr></hr>
           <CRow>
             <CCol md={6}>
               <RFFCFormInput type="text" name="packagename" label="Chocolatey package name" />
@@ -115,9 +222,10 @@ const ApplyStandard = () => {
               <RFFCFormInput type="text" name="customRepo" label="Custom repository URL" />
             </CCol>
           </CRow>
+          Install options:
           <RFFCFormSwitch value={true} name="InstallAsSystem" label="Install as system" />
           <RFFCFormSwitch name="DisableRestart" label="Disable Restart" />
-
+          <RFFCFormCheck name="InstallationIntent" label="Mark for Uninstallation" />
           <RFFCFormRadio
             value="On"
             name="AssignTo"
@@ -141,6 +249,18 @@ const ApplyStandard = () => {
             name="AssignTo"
             label="Assign to all users and devices"
           ></RFFCFormRadio>
+          <RFFCFormRadio
+            value="customGroup"
+            name="AssignTo"
+            label="Assign to Custom Group"
+          ></RFFCFormRadio>
+          <Condition when="AssignTo" is="customGroup">
+            <RFFCFormInput
+              type="text"
+              name="customGroup"
+              label="Custom Group Names separated by comma. Wildcards (*) are allowed"
+            />
+          </Condition>
         </CForm>
         <hr className="my-4" />
       </CippWizard.Page>
@@ -153,7 +273,6 @@ const ApplyStandard = () => {
         {!postResults.isSuccess && (
           <FormSpy>
             {(props) => {
-              /* eslint-disable react/prop-types */
               return (
                 <>
                   <CRow>
@@ -180,7 +299,8 @@ const ApplyStandard = () => {
                           Disable Restart: {props.values.DisableRestart ? 'Yes' : 'No'}
                         </CListGroupItem>
                         <CListGroupItem className="d-flex justify-content-between align-items-center">
-                          Assign to: {props.values.AssignTo}
+                          Assign to:
+                          {props.values.AssignTo == 'on' ? ' None' : ` ${props.values.AssignTo}`}
                         </CListGroupItem>
                       </CListGroup>
                     </CCol>
